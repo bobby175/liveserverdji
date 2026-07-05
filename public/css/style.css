@@ -483,6 +483,10 @@ body {
     color: var(--accent-primary);
 }
 
+.placeholder-hint.error {
+    color: var(--accent-tertiary);
+}
+
 /* Stream Stats Overlay */
 .stream-stats-overlay {
     position: absolute;
@@ -821,6 +825,12 @@ body {
 .toast.show {
     transform: translateY(0);
     opacity: 1;
+}
+
+.toast.error {
+    background: rgba(255, 107, 107, 0.12);
+    border-color: rgba(255, 107, 107, 0.22);
+    color: var(--accent-tertiary);
 }
 
 /* ─── Footer ─── */

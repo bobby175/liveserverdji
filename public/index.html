@@ -79,7 +79,7 @@
                     </div>
                 </div>
                 <div class="player-container" id="playerContainer">
-                    <video id="videoPlayer" autoplay muted playsinline></video>
+                    <video id="videoPlayer" autoplay muted playsinline preload="auto" crossorigin="anonymous"></video>
                     <div class="player-overlay" id="playerOverlay">
                         <div class="player-placeholder">
                             <div class="drone-animation">
@@ -338,7 +338,10 @@
     </footer>
 
     <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mpegts.js@1.7.3/dist/mpegts.min.js"></script>
+    <script>
+        window.mpegts || document.write('<script src="https://cdn.jsdelivr.net/npm/flv.js@1.6.2/dist/flv.min.js"><\/script>');
+    </script>
     <script src="js/app.js"></script>
 </body>
 </html>

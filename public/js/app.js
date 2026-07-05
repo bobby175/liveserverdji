@@ -1,41 +1,53 @@
-/* ═══════════════════════════════════════════════════════
+/*
    DJI Drone RTMP Live Stream Dashboard
-   Frontend Application
-   ═══════════════════════════════════════════════════════ */
+   Frontend application
+*/
 
 (function () {
     'use strict';
 
-    /* ─── Configuration ─── */
     const CONFIG = {
         API_BASE: window.location.origin,
-        HTTP_FLV_BASE: `http://${window.location.hostname}:8000`,
-        RTMP_BASE: `rtmp://${window.location.hostname}:1935`,
-        POLL_INTERVAL: 3000,      // Poll for streams every 3s
-        STATS_INTERVAL: 1000,     // Update stats every 1s
-        RECONNECT_DELAY: 5000,    // Reconnect player after 5s
-        MAX_RECONNECT: 10
+        POLL_INTERVAL: 3000,
+        STATS_INTERVAL: 1000,
+        RECONNECT_DELAY: 5000,
+        MAX_RECONNECT: 10,
+        MAX_LIVE_LATENCY: 1.5,
+        TARGET_LIVE_LATENCY: 0.3
     };
 
-    /* ─── State ─── */
+    const DEFAULT_SERVER = {
+        localIP: '',
+        rtmpPort: 1935,
+        httpFlvPort: 8000,
+        dashboardPort: 3000,
+        hlsEnabled: false
+    };
+
     const state = {
         player: null,
         currentStream: null,
+        currentPlaybackUrl: '',
         isPlaying: false,
         pollTimer: null,
         statsTimer: null,
         uptimeTimer: null,
+        reconnectTimer: null,
         reconnectAttempts: 0,
         serverOnline: false,
         streams: [],
-        localIP: ''
+        serverInfo: { ...DEFAULT_SERVER },
+        uptimeSnapshot: 0,
+        uptimeUpdatedAt: 0
     };
 
-    /* ─── DOM Elements ─── */
     const DOM = {
         videoPlayer: document.getElementById('videoPlayer'),
         playerOverlay: document.getElementById('playerOverlay'),
         playerContainer: document.getElementById('playerContainer'),
+        playerPlaceholder: document.querySelector('.player-placeholder'),
+        placeholderText: document.querySelector('.placeholder-text'),
+        placeholderHint: document.querySelector('.placeholder-hint'),
         liveBadge: document.getElementById('liveBadge'),
         streamTitle: document.getElementById('streamTitle'),
         streamSelector: document.getElementById('streamSelector'),
@@ -43,7 +55,6 @@
         serverUptime: document.getElementById('serverUptime'),
         streamCount: document.getElementById('streamCount'),
         streamStatsOverlay: document.getElementById('streamStatsOverlay'),
-        // Info panel
         infoStatus: document.getElementById('infoStatus'),
         infoStreamKey: document.getElementById('infoStreamKey'),
         infoDuration: document.getElementById('infoDuration'),
@@ -52,171 +63,256 @@
         infoFps: document.getElementById('infoFps'),
         infoBitrate: document.getElementById('infoBitrate'),
         infoLatency: document.getElementById('infoLatency'),
-        // Overlay stats
         overlayResolution: document.getElementById('overlayResolution'),
         overlayFps: document.getElementById('overlayFps'),
         overlayBitrate: document.getElementById('overlayBitrate'),
-        // OBS URLs
         obsRtmpUrl: document.getElementById('obsRtmpUrl'),
         obsFlvUrl: document.getElementById('obsFlvUrl'),
         obsHlsUrl: document.getElementById('obsHlsUrl'),
         djiRtmpUrl: document.getElementById('djiRtmpUrl'),
         serverIp: document.getElementById('serverIp'),
-        // Toast
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toastMessage')
     };
 
-    /* ─── Initialize ─── */
     function init() {
-        console.log('🚁 DJI Live Stream Dashboard initializing...');
+        console.log('DJI Live Stream Dashboard initializing...');
         setupCopyButtons();
-        detectLocalIP();
-        startPolling();
+        updateStaticConnectionUrls();
         startUptimeCounter();
+        startPolling();
     }
 
-    /* ─── FLV.js Player ─── */
-    function createPlayer(flvUrl) {
-        if (!flvjs.isSupported()) {
-            console.error('FLV.js is not supported in this browser');
-            showToast('Browser tidak mendukung FLV playback', 'error');
-            return;
+    function getMediaLibrary() {
+        const candidates = [window.mpegts, window.flvjs].filter(Boolean);
+        return candidates.find((library) => (
+            typeof library.isSupported === 'function' &&
+            library.isSupported() &&
+            typeof library.createPlayer === 'function'
+        )) || null;
+    }
+
+    function createPlayer(flvUrl, options = {}) {
+        const { resetReconnect = true } = options;
+        const mediaLibrary = getMediaLibrary();
+
+        if (!mediaLibrary) {
+            showPlayerMessage(
+                'Player belum siap',
+                'mpegts.js/flv.js tidak termuat. Cek koneksi internet atau gunakan file player lokal.',
+                true
+            );
+            showToast('Library player video tidak termuat', 'error');
+            return false;
         }
 
-        destroyPlayer();
+        destroyPlayer({ clearRetry: false });
 
-        console.log(`🎬 Creating player for: ${flvUrl}`);
+        if (resetReconnect) {
+            clearReconnectTimer();
+            state.reconnectAttempts = 0;
+        }
 
-        state.player = flvjs.createPlayer({
+        state.currentPlaybackUrl = flvUrl;
+        DOM.videoPlayer.muted = true;
+
+        console.log(`Creating player for: ${flvUrl}`);
+
+        state.player = mediaLibrary.createPlayer({
             type: 'flv',
             url: flvUrl,
             isLive: true,
-            hasAudio: false,
-            hasVideo: true,
-            enableStashBuffer: false,
-            stashInitialSize: 128,
-            enableWorker: true,
-            lazyLoadMaxDuration: 3 * 60,
-            seekType: 'range',
+            hasVideo: true
         }, {
             enableWorker: true,
-            lazyLoadMaxDuration: 3 * 60,
-            seekType: 'range',
+            enableStashBuffer: false,
+            stashInitialSize: 128,
+            lazyLoad: false,
+            deferLoadAfterSourceOpen: false,
+            liveBufferLatencyChasing: true,
+            liveBufferLatencyMaxLatency: CONFIG.MAX_LIVE_LATENCY,
+            liveBufferLatencyMinRemain: CONFIG.TARGET_LIVE_LATENCY,
+            autoCleanupSourceBuffer: true,
+            autoCleanupMaxBackwardDuration: 3,
+            autoCleanupMinBackwardDuration: 1,
+            seekType: 'range'
         });
 
         state.player.attachMediaElement(DOM.videoPlayer);
-
-        // Event handlers
-        state.player.on(flvjs.Events.ERROR, (errorType, errorDetail, errorInfo) => {
-            console.error('Player error:', errorType, errorDetail, errorInfo);
-            handlePlayerError();
-        });
-
-        state.player.on(flvjs.Events.LOADING_COMPLETE, () => {
-            console.log('Loading complete — stream may have ended');
-            handleStreamEnd();
-        });
-
-        state.player.on(flvjs.Events.STATISTICS_INFO, (stats) => {
-            updatePlayerStats(stats);
-        });
-
-        state.player.on(flvjs.Events.MEDIA_INFO, (mediaInfo) => {
-            updateMediaInfo(mediaInfo);
-        });
+        bindPlayerEvents(mediaLibrary);
 
         state.player.load();
-        state.player.play();
+        const playResult = state.player.play();
+        if (playResult && typeof playResult.catch === 'function') {
+            playResult.catch((error) => {
+                console.warn('Autoplay failed:', error);
+                showToast('Klik video jika autoplay diblokir browser', 'error');
+            });
+        }
 
         state.isPlaying = true;
-        state.reconnectAttempts = 0;
-
-        // Show video, hide overlay
         DOM.playerOverlay.classList.add('hidden');
         DOM.liveBadge.classList.add('active');
         DOM.streamStatsOverlay.classList.add('visible');
-
-        // Start stats polling
         startStatsTimer();
+
+        return true;
     }
 
-    function destroyPlayer() {
+    function bindPlayerEvents(mediaLibrary) {
+        const events = mediaLibrary.Events || {};
+
+        if (events.ERROR) {
+            state.player.on(events.ERROR, (errorType, errorDetail, errorInfo) => {
+                console.error('Player error:', errorType, errorDetail, errorInfo);
+                handlePlayerError();
+            });
+        }
+
+        if (events.LOADING_COMPLETE) {
+            state.player.on(events.LOADING_COMPLETE, () => {
+                console.log('Loading complete; stream may have ended');
+                if (state.currentStream) {
+                    handlePlayerError();
+                }
+            });
+        }
+
+        if (events.STATISTICS_INFO) {
+            state.player.on(events.STATISTICS_INFO, updatePlayerStats);
+        }
+
+        if (events.MEDIA_INFO) {
+            state.player.on(events.MEDIA_INFO, updateMediaInfo);
+        }
+    }
+
+    function destroyPlayer(options = {}) {
+        const { clearRetry = true } = options;
+
+        if (clearRetry) {
+            clearReconnectTimer();
+        }
+
         if (state.player) {
             try {
                 state.player.pause();
                 state.player.unload();
                 state.player.detachMediaElement();
                 state.player.destroy();
-            } catch (e) {
-                console.warn('Player destroy error:', e);
+            } catch (error) {
+                console.warn('Player destroy error:', error);
             }
+
             state.player = null;
         }
+
         state.isPlaying = false;
         stopStatsTimer();
     }
 
     function handlePlayerError() {
-        if (state.reconnectAttempts < CONFIG.MAX_RECONNECT) {
-            state.reconnectAttempts++;
-            console.log(`🔄 Reconnecting... attempt ${state.reconnectAttempts}/${CONFIG.MAX_RECONNECT}`);
-            setTimeout(() => {
-                if (state.currentStream) {
-                    createPlayer(state.currentStream.urls.httpFlv);
-                }
-            }, CONFIG.RECONNECT_DELAY);
-        } else {
-            console.error('Max reconnect attempts reached');
-            handleStreamEnd();
+        if (!state.currentStream) return;
+        if (state.reconnectTimer) return;
+
+        if (state.reconnectAttempts >= CONFIG.MAX_RECONNECT) {
+            showPlayerMessage(
+                'Stream belum bisa diputar',
+                'Reconnect sudah mencapai batas. Pastikan drone mengirim H.264 ke URL RTMP yang benar.',
+                true
+            );
+            showToast('Gagal memutar live stream', 'error');
+            destroyPlayer();
+            return;
+        }
+
+        state.reconnectAttempts += 1;
+        showToast(`Reconnect stream ${state.reconnectAttempts}/${CONFIG.MAX_RECONNECT}`, 'error');
+
+        state.reconnectTimer = setTimeout(() => {
+            state.reconnectTimer = null;
+            const latestStream = findCurrentStream() || state.currentStream;
+            createPlayer(getStreamPlaybackUrl(latestStream), { resetReconnect: false });
+        }, CONFIG.RECONNECT_DELAY);
+    }
+
+    function clearReconnectTimer() {
+        if (state.reconnectTimer) {
+            clearTimeout(state.reconnectTimer);
+            state.reconnectTimer = null;
         }
     }
 
-    function handleStreamEnd() {
+    function handleStreamEnd(title = 'Stream berakhir') {
         destroyPlayer();
+        state.currentStream = null;
+        state.currentPlaybackUrl = '';
+        state.reconnectAttempts = 0;
         DOM.playerOverlay.classList.remove('hidden');
         DOM.liveBadge.classList.remove('active');
         DOM.streamStatsOverlay.classList.remove('visible');
-        DOM.streamTitle.textContent = 'Stream berakhir';
-        state.currentStream = null;
+        DOM.streamTitle.textContent = title;
         resetInfoPanel();
+        updateStaticConnectionUrls();
     }
 
-    /* ─── Player Stats ─── */
+    function showIdleState() {
+        DOM.playerOverlay.classList.remove('hidden');
+        DOM.liveBadge.classList.remove('active');
+        DOM.streamStatsOverlay.classList.remove('visible');
+        DOM.streamTitle.textContent = 'Menunggu Stream...';
+        showPlayerMessage(
+            'Menunggu drone terhubung...',
+            `Push RTMP stream ke ${buildDefaultPublishUrl()}`,
+            false
+        );
+    }
+
+    function showPlayerMessage(message, hint, isError) {
+        if (DOM.placeholderText) {
+            DOM.placeholderText.textContent = message;
+        }
+
+        if (DOM.placeholderHint) {
+            DOM.placeholderHint.textContent = hint || '';
+            DOM.placeholderHint.classList.toggle('error', Boolean(isError));
+        }
+    }
+
     function updatePlayerStats(stats) {
         if (!stats) return;
 
-        const speed = stats.speed ? `${Math.round(stats.speed)} kbps` : '- kbps';
-        DOM.overlayBitrate.textContent = speed;
-        DOM.infoBitrate.textContent = speed;
+        const speed = Number(stats.speed);
+        const bitrate = Number.isFinite(speed) && speed > 0 ? `${Math.round(speed * 8)} kbps` : '- kbps';
+        DOM.overlayBitrate.textContent = bitrate;
+        DOM.infoBitrate.textContent = bitrate;
     }
 
     function updateMediaInfo(mediaInfo) {
         if (!mediaInfo) return;
 
-        // Video info
         if (mediaInfo.width && mediaInfo.height) {
-            const res = `${mediaInfo.width}x${mediaInfo.height}`;
-            DOM.overlayResolution.textContent = res;
-            DOM.infoResolution.textContent = res;
+            const resolution = `${mediaInfo.width}x${mediaInfo.height}`;
+            DOM.overlayResolution.textContent = resolution;
+            DOM.infoResolution.textContent = resolution;
         }
 
         if (mediaInfo.videoDataRate) {
             DOM.infoBitrate.textContent = `${Math.round(mediaInfo.videoDataRate)} kbps`;
         }
 
-        // FPS
         if (mediaInfo.fps) {
             const fps = `${Math.round(mediaInfo.fps)} fps`;
             DOM.overlayFps.textContent = fps;
             DOM.infoFps.textContent = fps;
         }
 
-        // Codec
-        if (mediaInfo.videoCodec) {
-            DOM.infoCodec.textContent = mediaInfo.videoCodec;
-            if (mediaInfo.videoCodec.toLowerCase().includes('hevc') || mediaInfo.videoCodec.toLowerCase().includes('hvc')) {
-                showToast('HEVC/H.265 tidak didukung browser. Ubah ke H.264 di setting kamera drone!', 'error');
+        const codec = String(mediaInfo.videoCodec || mediaInfo.mimeType || '').trim();
+        if (codec) {
+            DOM.infoCodec.textContent = codec;
+            const lowerCodec = codec.toLowerCase();
+            if (lowerCodec.includes('hevc') || lowerCodec.includes('hvc') || lowerCodec.includes('h265') || lowerCodec.includes('h.265')) {
+                showToast('Browser tidak mendukung H.265. Ubah stream drone ke H.264.', 'error');
             }
         }
     }
@@ -224,22 +320,23 @@
     function startStatsTimer() {
         stopStatsTimer();
         state.statsTimer = setInterval(() => {
-            if (state.player && state.isPlaying) {
-                const stats = state.player.statisticsInfo;
-                if (stats) {
-                    updatePlayerStats(stats);
+            if (!state.player || !state.isPlaying) return;
+
+            if (state.player.statisticsInfo) {
+                updatePlayerStats(state.player.statisticsInfo);
+            }
+
+            const video = DOM.videoPlayer;
+            if (video.buffered && video.buffered.length > 0) {
+                const bufferedEnd = video.buffered.end(video.buffered.length - 1);
+                const latency = bufferedEnd - video.currentTime;
+
+                if (Number.isFinite(latency) && latency >= 0) {
+                    DOM.infoLatency.textContent = `${latency.toFixed(1)}s`;
                 }
 
-                // Update latency
-                if (DOM.videoPlayer.buffered && DOM.videoPlayer.buffered.length > 0) {
-                    const bufferedEnd = DOM.videoPlayer.buffered.end(DOM.videoPlayer.buffered.length - 1);
-                    const latency = bufferedEnd - DOM.videoPlayer.currentTime;
-                    DOM.infoLatency.textContent = `${latency.toFixed(1)}s`;
-
-                    // Auto-chase live edge if latency > 5s
-                    if (latency > 5) {
-                        DOM.videoPlayer.currentTime = bufferedEnd - 0.5;
-                    }
+                if (latency > CONFIG.MAX_LIVE_LATENCY) {
+                    video.currentTime = Math.max(bufferedEnd - CONFIG.TARGET_LIVE_LATENCY, 0);
                 }
             }
         }, CONFIG.STATS_INTERVAL);
@@ -252,136 +349,244 @@
         }
     }
 
-    /* ─── Stream Polling ─── */
     function startPolling() {
         pollStreams();
         state.pollTimer = setInterval(pollStreams, CONFIG.POLL_INTERVAL);
     }
 
     async function pollStreams() {
+        let streamsLoaded = false;
+
         try {
-            const response = await fetch(`${CONFIG.API_BASE}/api/streams`);
-            if (!response.ok) throw new Error('API error');
+            const serverResponse = await fetch(`${CONFIG.API_BASE}/api/server`, { cache: 'no-store' });
+            if (serverResponse.ok) {
+                applyServerInfo(await serverResponse.json());
+            }
+        } catch (error) {
+            console.warn('Failed to fetch server info:', error);
+        }
+
+        try {
+            const response = await fetch(`${CONFIG.API_BASE}/api/streams`, { cache: 'no-store' });
+            if (!response.ok) throw new Error(`API error ${response.status}`);
 
             const data = await response.json();
+            streamsLoaded = true;
             state.serverOnline = true;
             updateServerStatus(true);
             handleStreamsUpdate(data);
         } catch (error) {
             state.serverOnline = false;
             updateServerStatus(false);
+            console.warn('Failed to fetch streams:', error);
         }
 
-        // Also poll server info
-        try {
-            const response = await fetch(`${CONFIG.API_BASE}/api/server`);
-            if (response.ok) {
-                const serverInfo = await response.json();
-                updateServerUptime(serverInfo.uptime);
-            }
-        } catch (e) { /* silent */ }
+        if (!streamsLoaded && !state.currentStream) {
+            DOM.streamCount.textContent = '-';
+        }
+    }
+
+    function applyServerInfo(serverInfo) {
+        state.serverInfo = {
+            ...state.serverInfo,
+            ...serverInfo
+        };
+
+        if (serverInfo.localIP) {
+            state.serverInfo.localIP = serverInfo.localIP;
+        }
+
+        if (typeof serverInfo.uptime === 'number') {
+            state.uptimeSnapshot = serverInfo.uptime;
+            state.uptimeUpdatedAt = Date.now();
+            updateServerUptime(serverInfo.uptime);
+        }
+
+        updateStaticConnectionUrls();
+        if (state.currentStream) {
+            updateOBSUrls(state.currentStream);
+        }
     }
 
     function handleStreamsUpdate(data) {
-        const { streams, count } = data;
-        DOM.streamCount.textContent = count;
-
-        // Update stream selector
+        const streams = Array.isArray(data.streams) ? data.streams : [];
+        state.streams = streams;
+        DOM.streamCount.textContent = streams.length;
         updateStreamSelector(streams);
 
-        // Auto-connect to first stream if none selected
-        if (count > 0 && !state.currentStream) {
-            const stream = streams[0];
-            selectStream(stream);
-        }
-
-        // Check if current stream is still active
         if (state.currentStream) {
-            const stillActive = streams.find(s => s.streamPath === state.currentStream.streamPath);
+            const stillActive = findCurrentStream();
             if (!stillActive) {
-                handleStreamEnd();
-            } else {
-                // Update duration
-                updateStreamDuration(stillActive.startTime);
+                handleStreamEnd('Stream berakhir');
+                if (streams.length === 0) {
+                    showIdleState();
+                }
+                return;
             }
+
+            state.currentStream = stillActive;
+            updateStreamDuration(stillActive.startTime);
+            updateOBSUrls(stillActive);
+            return;
         }
 
-        state.streams = streams;
+        if (streams.length > 0) {
+            selectStream(streams[0]);
+        } else {
+            resetInfoPanel();
+            showIdleState();
+        }
     }
 
     function updateStreamSelector(streams) {
         const currentValue = DOM.streamSelector.value;
 
-        // Clear options except default
         while (DOM.streamSelector.options.length > 1) {
             DOM.streamSelector.remove(1);
         }
 
-        streams.forEach(stream => {
+        streams.forEach((stream) => {
             const option = document.createElement('option');
             option.value = stream.streamPath;
-            option.textContent = `📡 ${stream.key} (${stream.app})`;
+            option.textContent = `${stream.key} (${stream.app})`;
             if (stream.streamPath === currentValue) {
                 option.selected = true;
             }
             DOM.streamSelector.appendChild(option);
         });
 
-        // Handle selector change
-        DOM.streamSelector.onchange = (e) => {
-            const selectedPath = e.target.value;
+        DOM.streamSelector.onchange = (event) => {
+            const selectedPath = event.target.value;
             if (!selectedPath) return;
 
-            const stream = streams.find(s => s.streamPath === selectedPath);
+            const stream = streams.find((item) => item.streamPath === selectedPath);
             if (stream) {
                 selectStream(stream);
             }
         };
     }
 
+    function findCurrentStream() {
+        if (!state.currentStream) return null;
+        return state.streams.find((stream) => stream.streamPath === state.currentStream.streamPath) || null;
+    }
+
     function selectStream(stream) {
         state.currentStream = stream;
-        DOM.streamTitle.textContent = `${stream.key} — Live`;
-
-        // Update info panel
-        DOM.infoStatus.innerHTML = '<span class="status-badge online">● Live</span>';
-        DOM.infoStreamKey.textContent = stream.key;
-
-        // Update OBS URLs
+        state.reconnectAttempts = 0;
+        DOM.streamTitle.textContent = `${stream.key} - Live`;
+        setInfoStatus(true);
+        DOM.infoStreamKey.textContent = stream.key || '-';
+        updateStreamDuration(stream.startTime);
         updateOBSUrls(stream);
+        resetPlayerMetrics();
 
-        // Create player
-        const ipToUse = state.localIP || window.location.hostname;
-        const flvUrl = stream.urls.httpFlv.replace('localhost', ipToUse);
-        createPlayer(flvUrl);
-
-        // Set selector value
+        const playbackUrl = getStreamPlaybackUrl(stream);
+        createPlayer(playbackUrl, { resetReconnect: true });
         DOM.streamSelector.value = stream.streamPath;
     }
 
     function updateOBSUrls(stream) {
-        const ipToUse = state.localIP || window.location.hostname;
-        DOM.obsRtmpUrl.textContent = stream.urls.rtmp.replace('localhost', ipToUse);
-        DOM.obsFlvUrl.textContent = stream.urls.httpFlv.replace('localhost', ipToUse);
-        DOM.obsHlsUrl.textContent = stream.urls.hls.replace('localhost', ipToUse);
+        const obsHost = getPlaybackHost();
+        const streamPath = stream.streamPath || '/live/drone';
+        const urls = stream.urls || {};
+
+        DOM.obsRtmpUrl.textContent = rewriteUrlHost(
+            urls.rtmp || buildUrl('rtmp', obsHost, getPort('rtmpPort'), streamPath),
+            obsHost
+        );
+
+        DOM.obsFlvUrl.textContent = rewriteUrlHost(
+            urls.httpFlv || buildUrl('http', obsHost, getPort('httpFlvPort'), `${streamPath}.flv`),
+            obsHost
+        );
+
+        const hlsUrl = urls.hls || (
+            state.serverInfo.hlsEnabled
+                ? buildUrl('http', obsHost, getPort('httpFlvPort'), `${streamPath}/index.m3u8`)
+                : ''
+        );
+        DOM.obsHlsUrl.textContent = hlsUrl ? rewriteUrlHost(hlsUrl, obsHost) : 'HLS nonaktif - install FFmpeg';
     }
 
-    /* ─── Server Status ─── */
-    function updateServerStatus(online) {
-        if (online) {
-            DOM.serverStatus.classList.remove('offline');
-            DOM.serverStatus.querySelector('span').textContent = 'Server Online';
-        } else {
-            DOM.serverStatus.classList.add('offline');
-            DOM.serverStatus.querySelector('span').textContent = 'Server Offline';
+    function getStreamPlaybackUrl(stream) {
+        const playbackHost = getPlaybackHost();
+        const fallbackUrl = buildUrl('http', playbackHost, getPort('httpFlvPort'), `${stream.streamPath}.flv`);
+        return rewriteUrlHost(stream.urls && stream.urls.httpFlv ? stream.urls.httpFlv : fallbackUrl, playbackHost);
+    }
+
+    function updateStaticConnectionUrls() {
+        const publishUrl = buildDefaultPublishUrl();
+        DOM.serverIp.textContent = getPublishHost();
+        DOM.djiRtmpUrl.textContent = publishUrl;
+
+        if (!state.currentStream) {
+            const obsHost = getPlaybackHost();
+            DOM.obsRtmpUrl.textContent = buildUrl('rtmp', obsHost, getPort('rtmpPort'), '/live/drone');
+            DOM.obsFlvUrl.textContent = buildUrl('http', obsHost, getPort('httpFlvPort'), '/live/drone.flv');
+            DOM.obsHlsUrl.textContent = state.serverInfo.hlsEnabled
+                ? buildUrl('http', obsHost, getPort('httpFlvPort'), '/live/drone/index.m3u8')
+                : 'HLS nonaktif - install FFmpeg';
+        }
+
+        if (!state.currentStream && DOM.placeholderHint) {
+            DOM.placeholderHint.textContent = `Push RTMP stream ke ${publishUrl}`;
         }
     }
 
-    let serverStartTime = Date.now();
+    function buildDefaultPublishUrl() {
+        return buildUrl('rtmp', getPublishHost(), getPort('rtmpPort'), '/live/drone');
+    }
+
+    function buildUrl(protocol, host, port, urlPath) {
+        return `${protocol}://${formatHostForUrl(host)}:${port}${urlPath}`;
+    }
+
+    function rewriteUrlHost(rawUrl, host) {
+        if (!rawUrl) return rawUrl;
+        return rawUrl.replace(/\/\/(\[[^\]]+\]|[^/:]+)(?=:)/, `//${formatHostForUrl(host)}`);
+    }
+
+    function formatHostForUrl(host) {
+        if (!host) return 'localhost';
+        return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    }
+
+    function getBrowserHost() {
+        return window.location.hostname || '';
+    }
+
+    function getPlaybackHost() {
+        return getBrowserHost() || state.serverInfo.localIP || 'localhost';
+    }
+
+    function getPublishHost() {
+        const browserHost = getBrowserHost();
+        if (isLocalHost(browserHost) && state.serverInfo.localIP) {
+            return state.serverInfo.localIP;
+        }
+
+        return browserHost || state.serverInfo.localIP || 'localhost';
+    }
+
+    function isLocalHost(host) {
+        return !host || host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    }
+
+    function getPort(name) {
+        return Number(state.serverInfo[name]) || DEFAULT_SERVER[name];
+    }
+
+    function updateServerStatus(online) {
+        DOM.serverStatus.classList.toggle('offline', !online);
+        DOM.serverStatus.querySelector('span').textContent = online ? 'Server Online' : 'Server Offline';
+    }
 
     function startUptimeCounter() {
         state.uptimeTimer = setInterval(() => {
-            // Uptime is fetched from server; this is a fallback
+            if (!state.uptimeUpdatedAt) return;
+            const elapsed = (Date.now() - state.uptimeUpdatedAt) / 1000;
+            updateServerUptime(state.uptimeSnapshot + elapsed);
         }, 1000);
     }
 
@@ -391,17 +596,28 @@
 
     function updateStreamDuration(startTimeISO) {
         const start = new Date(startTimeISO).getTime();
-        const now = Date.now();
-        const seconds = Math.floor((now - start) / 1000);
+        if (!Number.isFinite(start)) return;
+
+        const seconds = Math.max(Math.floor((Date.now() - start) / 1000), 0);
         DOM.infoDuration.textContent = formatDuration(seconds);
     }
 
-    /* ─── Info Panel Reset ─── */
+    function setInfoStatus(online) {
+        const badge = document.createElement('span');
+        badge.className = `status-badge ${online ? 'online' : 'offline'}`;
+        badge.textContent = online ? 'Live' : 'Offline';
+        DOM.infoStatus.replaceChildren(badge);
+    }
+
     function resetInfoPanel() {
-        DOM.infoStatus.innerHTML = '<span class="status-badge offline">Offline</span>';
+        setInfoStatus(false);
         DOM.infoStreamKey.textContent = '-';
         DOM.infoDuration.textContent = '00:00:00';
         DOM.infoCodec.textContent = '-';
+        resetPlayerMetrics();
+    }
+
+    function resetPlayerMetrics() {
         DOM.infoResolution.textContent = '-';
         DOM.infoFps.textContent = '-';
         DOM.infoBitrate.textContent = '-';
@@ -411,53 +627,17 @@
         DOM.overlayBitrate.textContent = '- kbps';
     }
 
-    /* ─── IP Detection ─── */
-    async function detectLocalIP() {
-        try {
-            const response = await fetch(`${CONFIG.API_BASE}/api/ip`);
-            if (response.ok) {
-                const data = await response.json();
-                if (data.ip) {
-                    state.localIP = data.ip;
-                }
-            }
-        } catch (e) {
-            console.warn('Failed to fetch local IP, falling back to hostname');
-        }
-
-        const ipToUse = state.localIP || window.location.hostname || 'YOUR_IP';
-        DOM.serverIp.textContent = ipToUse;
-
-        // Update DJI URL
-        const rtmpUrl = `rtmp://${ipToUse}:1935/live/drone`;
-        DOM.djiRtmpUrl.textContent = rtmpUrl;
-
-        // Update OBS URLs if stream is active
-        if (state.currentStream) {
-            updateOBSUrls(state.currentStream);
-        }
-    }
-
-    /* ─── Copy to Clipboard ─── */
     function setupCopyButtons() {
-        document.querySelectorAll('.copy-btn').forEach(btn => {
-            btn.addEventListener('click', async () => {
-                const targetId = btn.dataset.target;
-                const targetEl = document.getElementById(targetId);
-                if (!targetEl) return;
+        document.querySelectorAll('.copy-btn').forEach((button) => {
+            button.addEventListener('click', async () => {
+                const target = document.getElementById(button.dataset.target);
+                if (!target) return;
 
-                const text = targetEl.textContent.trim();
-
+                const text = target.textContent.trim();
                 try {
                     await navigator.clipboard.writeText(text);
-                    btn.classList.add('copied');
-                    showToast('URL berhasil disalin!');
-
-                    setTimeout(() => {
-                        btn.classList.remove('copied');
-                    }, 2000);
-                } catch (err) {
-                    // Fallback
+                    markCopied(button);
+                } catch (error) {
                     const textarea = document.createElement('textarea');
                     textarea.value = text;
                     textarea.style.position = 'fixed';
@@ -466,41 +646,43 @@
                     textarea.select();
                     document.execCommand('copy');
                     document.body.removeChild(textarea);
-
-                    btn.classList.add('copied');
-                    showToast('URL berhasil disalin!');
-                    setTimeout(() => btn.classList.remove('copied'), 2000);
+                    markCopied(button);
                 }
             });
         });
     }
 
-    /* ─── Toast ─── */
+    function markCopied(button) {
+        button.classList.add('copied');
+        showToast('URL berhasil disalin!');
+        setTimeout(() => button.classList.remove('copied'), 2000);
+    }
+
     let toastTimeout;
-    function showToast(message) {
+    function showToast(message, type = 'success') {
         clearTimeout(toastTimeout);
         DOM.toastMessage.textContent = message;
+        DOM.toast.classList.toggle('error', type === 'error');
         DOM.toast.classList.add('show');
         toastTimeout = setTimeout(() => {
             DOM.toast.classList.remove('show');
-        }, 2500);
+        }, 2800);
     }
 
-    /* ─── Utilities ─── */
     function formatDuration(totalSeconds) {
-        const hours = Math.floor(totalSeconds / 3600);
-        const minutes = Math.floor((totalSeconds % 3600) / 60);
-        const seconds = Math.floor(totalSeconds % 60);
+        const safeSeconds = Math.max(Math.floor(Number(totalSeconds) || 0), 0);
+        const hours = Math.floor(safeSeconds / 3600);
+        const minutes = Math.floor((safeSeconds % 3600) / 60);
+        const seconds = safeSeconds % 60;
+
         return [hours, minutes, seconds]
-            .map(v => String(v).padStart(2, '0'))
+            .map((value) => String(value).padStart(2, '0'))
             .join(':');
     }
 
-    /* ─── Start ─── */
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {
         init();
     }
-
 })();
