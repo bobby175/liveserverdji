@@ -55,6 +55,7 @@
         streamTitle: document.getElementById('streamTitle'),
         streamSelector: document.getElementById('streamSelector'),
         serverStatus: document.getElementById('serverStatus'),
+        shutdownBtn: document.getElementById('shutdownBtn'),
         serverUptime: document.getElementById('serverUptime'),
         streamCount: document.getElementById('streamCount'),
         streamStatsOverlay: document.getElementById('streamStatsOverlay'),
@@ -83,6 +84,7 @@
         console.log('DJI Live Stream Dashboard initializing...');
         setupCopyButtons();
         setupFullscreenButton();
+        setupShutdownButton();
         updateStaticConnectionUrls();
         startUptimeCounter();
         startPolling();
@@ -656,6 +658,56 @@
         DOM.fullscreenBtn.setAttribute('title', isFullscreen ? 'Exit fullscreen' : 'Fullscreen');
         DOM.fullscreenEnterIcon.classList.toggle('hidden', isFullscreen);
         DOM.fullscreenExitIcon.classList.toggle('hidden', !isFullscreen);
+    }
+
+    function setupShutdownButton() {
+        if (!DOM.shutdownBtn) return;
+
+        DOM.shutdownBtn.addEventListener('click', async () => {
+            const confirmed = window.confirm('Matikan server live streaming sekarang? Dashboard akan offline sampai server dijalankan lagi.');
+            if (!confirmed) return;
+
+            DOM.shutdownBtn.disabled = true;
+            DOM.shutdownBtn.classList.add('loading');
+            showToast('Mematikan server...');
+
+            try {
+                const response = await fetch(`${CONFIG.API_BASE}/api/shutdown`, {
+                    method: 'POST',
+                    cache: 'no-store'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Shutdown failed: ${response.status}`);
+                }
+
+                updateServerStatus(false);
+                DOM.serverStatus.querySelector('span').textContent = 'Server Stopping';
+                showToast('Server dimatikan');
+                stopClientTimers();
+                destroyPlayer();
+            } catch (error) {
+                console.warn('Shutdown request failed:', error);
+                DOM.shutdownBtn.disabled = false;
+                DOM.shutdownBtn.classList.remove('loading');
+                showToast('Gagal mematikan server', 'error');
+            }
+        });
+    }
+
+    function stopClientTimers() {
+        if (state.pollTimer) {
+            clearInterval(state.pollTimer);
+            state.pollTimer = null;
+        }
+
+        if (state.uptimeTimer) {
+            clearInterval(state.uptimeTimer);
+            state.uptimeTimer = null;
+        }
+
+        stopStatsTimer();
+        clearReconnectTimer();
     }
 
     function updateServerStatus(online) {

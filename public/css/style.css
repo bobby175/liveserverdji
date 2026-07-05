@@ -238,6 +238,42 @@ body {
     animation: none;
 }
 
+.shutdown-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: var(--radius-xl);
+    background: rgba(255, 107, 107, 0.08);
+    border: 1px solid rgba(255, 107, 107, 0.2);
+    color: var(--accent-tertiary);
+    font-family: var(--font-main);
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+}
+
+.shutdown-btn:hover {
+    background: rgba(255, 107, 107, 0.15);
+    border-color: rgba(255, 107, 107, 0.35);
+    box-shadow: 0 0 18px rgba(255, 107, 107, 0.12);
+}
+
+.shutdown-btn:active {
+    transform: scale(0.97);
+}
+
+.shutdown-btn:disabled {
+    cursor: wait;
+    opacity: 0.65;
+}
+
+.shutdown-btn svg {
+    width: 15px;
+    height: 15px;
+}
+
 @keyframes pulse {
     0%, 100% { opacity: 1; transform: scale(1); }
     50% { opacity: 0.5; transform: scale(0.85); }
@@ -949,6 +985,8 @@ body {
     .header-right {
         width: 100%;
         justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 10px;
     }
 
     .main {
@@ -976,6 +1014,11 @@ body {
 
     .info-grid {
         grid-template-columns: 1fr;
+    }
+
+    .shutdown-btn {
+        flex: 1;
+        justify-content: center;
     }
 }
 

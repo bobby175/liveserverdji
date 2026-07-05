@@ -335,9 +335,33 @@ app.get('/api/obs-config', (req, res) => {
   });
 });
 
+app.post('/api/shutdown', (req, res) => {
+  console.log('Shutdown requested from dashboard.');
+  res.json({ ok: true, message: 'Server shutting down' });
+
+  setTimeout(() => {
+    try {
+      nms.stop();
+    } catch (error) {
+      console.warn('Node Media Server stop failed:', error.message);
+    }
+
+    if (dashboardServer) {
+      dashboardServer.close(() => {
+        process.exit(0);
+      });
+
+      setTimeout(() => process.exit(0), 1000).unref();
+      return;
+    }
+
+    process.exit(0);
+  }, 250);
+});
+
 nms.run();
 
-app.listen(DASHBOARD_PORT, '0.0.0.0', () => {
+const dashboardServer = app.listen(DASHBOARD_PORT, '0.0.0.0', () => {
   const localIP = getLocalIP();
 
   console.log('');
