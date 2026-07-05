@@ -9,7 +9,7 @@ Dashboard lokal untuk menerima live stream RTMP dari DJI/OBS dan menampilkannya 
 - HTTP-FLV preview di port `8000`
 - Auto-detect stream aktif
 - URL DJI/OBS otomatis mengikuti IP server
-- HLS otomatis memakai `ffmpeg-static`
+- HLS memakai `ffmpeg-static` di desktop atau FFmpeg sistem di Linux/Termux
 
 ## Install
 
@@ -86,7 +86,7 @@ Setting sumber stream yang disarankan:
 
 ## HLS / FFmpeg
 
-Project ini memakai `ffmpeg-static`, jadi HLS akan aktif otomatis setelah:
+Di desktop, project ini memakai `ffmpeg-static`, jadi HLS akan aktif otomatis setelah:
 
 ```bash
 npm install
@@ -104,7 +104,8 @@ npm start
 Linux/Termux:
 
 ```bash
-FFMPEG_PATH=/usr/bin/ffmpeg npm start
+pkg install ffmpeg
+FFMPEG_PATH=/data/data/com.termux/files/usr/bin/ffmpeg npm start
 ```
 
 Untuk preview delay rendah tetap gunakan HTTP-FLV. HLS lebih cocok sebagai fallback untuk player yang tidak mendukung FLV.
@@ -115,12 +116,14 @@ Project ini juga bisa dijalankan di Android dengan Termux:
 
 ```bash
 pkg update
-pkg install nodejs git
+pkg install nodejs git ffmpeg
 git clone https://github.com/bobby175/liveserverdji.git
 cd liveserverdji
-npm install
-npm start
+npm install --omit=optional
+node server.js
 ```
+
+`--omit=optional` sengaja dipakai agar Termux tidak mencoba memasang `ffmpeg-static`, karena paket itu sering tidak cocok di Android. Server tetap bisa menjalankan HLS dari FFmpeg Termux.
 
 Jika DJI app dan server berjalan di HP yang sama, coba URL:
 
