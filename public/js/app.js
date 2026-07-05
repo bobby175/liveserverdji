@@ -48,6 +48,9 @@
         playerPlaceholder: document.querySelector('.player-placeholder'),
         placeholderText: document.querySelector('.placeholder-text'),
         placeholderHint: document.querySelector('.placeholder-hint'),
+        fullscreenBtn: document.getElementById('fullscreenBtn'),
+        fullscreenEnterIcon: document.querySelector('.fullscreen-enter-icon'),
+        fullscreenExitIcon: document.querySelector('.fullscreen-exit-icon'),
         liveBadge: document.getElementById('liveBadge'),
         streamTitle: document.getElementById('streamTitle'),
         streamSelector: document.getElementById('streamSelector'),
@@ -70,6 +73,7 @@
         obsFlvUrl: document.getElementById('obsFlvUrl'),
         obsHlsUrl: document.getElementById('obsHlsUrl'),
         djiRtmpUrl: document.getElementById('djiRtmpUrl'),
+        lanDashboardUrl: document.getElementById('lanDashboardUrl'),
         serverIp: document.getElementById('serverIp'),
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toastMessage')
@@ -78,6 +82,7 @@
     function init() {
         console.log('DJI Live Stream Dashboard initializing...');
         setupCopyButtons();
+        setupFullscreenButton();
         updateStaticConnectionUrls();
         startUptimeCounter();
         startPolling();
@@ -517,8 +522,11 @@
 
     function updateStaticConnectionUrls() {
         const publishUrl = buildDefaultPublishUrl();
+        const lanDashboardUrl = buildLanDashboardUrl();
+
         DOM.serverIp.textContent = getPublishHost();
         DOM.djiRtmpUrl.textContent = publishUrl;
+        DOM.lanDashboardUrl.textContent = lanDashboardUrl;
 
         if (!state.currentStream) {
             const obsHost = getPlaybackHost();
@@ -536,6 +544,11 @@
 
     function buildDefaultPublishUrl() {
         return buildUrl('rtmp', getPublishHost(), getPort('rtmpPort'), '/live/drone');
+    }
+
+    function buildLanDashboardUrl() {
+        const host = state.serverInfo.localIP || getPublishHost();
+        return buildUrl('http', host, getPort('dashboardPort'), '');
     }
 
     function buildUrl(protocol, host, port, urlPath) {
@@ -575,6 +588,74 @@
 
     function getPort(name) {
         return Number(state.serverInfo[name]) || DEFAULT_SERVER[name];
+    }
+
+    function setupFullscreenButton() {
+        if (!DOM.fullscreenBtn) return;
+
+        DOM.fullscreenBtn.addEventListener('click', toggleFullscreen);
+        document.addEventListener('fullscreenchange', updateFullscreenButton);
+        document.addEventListener('webkitfullscreenchange', updateFullscreenButton);
+        updateFullscreenButton();
+    }
+
+    async function toggleFullscreen() {
+        const fullscreenElement = getFullscreenElement();
+
+        try {
+            if (fullscreenElement) {
+                await exitFullscreen();
+            } else {
+                await enterFullscreen(DOM.playerContainer);
+            }
+        } catch (error) {
+            console.warn('Fullscreen failed:', error);
+            showToast('Fullscreen tidak didukung browser ini', 'error');
+        }
+    }
+
+    function getFullscreenElement() {
+        return document.fullscreenElement || document.webkitFullscreenElement || null;
+    }
+
+    async function enterFullscreen(element) {
+        if (element.requestFullscreen) {
+            await element.requestFullscreen();
+            return;
+        }
+
+        if (element.webkitRequestFullscreen) {
+            element.webkitRequestFullscreen();
+            return;
+        }
+
+        if (DOM.videoPlayer.webkitEnterFullscreen) {
+            DOM.videoPlayer.webkitEnterFullscreen();
+            return;
+        }
+
+        throw new Error('Fullscreen API unavailable');
+    }
+
+    async function exitFullscreen() {
+        if (document.exitFullscreen) {
+            await document.exitFullscreen();
+            return;
+        }
+
+        if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        }
+    }
+
+    function updateFullscreenButton() {
+        const isFullscreen = Boolean(getFullscreenElement());
+
+        DOM.playerContainer.classList.toggle('is-fullscreen', isFullscreen);
+        DOM.fullscreenBtn.setAttribute('aria-label', isFullscreen ? 'Exit fullscreen' : 'Fullscreen');
+        DOM.fullscreenBtn.setAttribute('title', isFullscreen ? 'Exit fullscreen' : 'Fullscreen');
+        DOM.fullscreenEnterIcon.classList.toggle('hidden', isFullscreen);
+        DOM.fullscreenExitIcon.classList.toggle('hidden', !isFullscreen);
     }
 
     function updateServerStatus(online) {

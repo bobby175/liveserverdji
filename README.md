@@ -35,6 +35,18 @@ Jika ingin dibuka dari perangkat lain dalam jaringan yang sama, gunakan URL LAN 
 http://192.168.x.x:3000
 ```
 
+Dashboard juga menampilkan URL LAN yang bisa disalin dari panel setup.
+
+Jika perangkat lain tidak bisa membuka dashboard:
+
+- Pastikan semua perangkat berada di WiFi/hotspot yang sama
+- Pastikan firewall mengizinkan port `3000`, `1935`, dan `8000`
+- Gunakan IP LAN server, bukan `localhost`
+
+## Fullscreen
+
+Klik tombol fullscreen di pojok kanan atas player untuk membuka tampilan live memenuhi layar. Tombol tetap tersedia saat player berada dalam mode fullscreen.
+
 ## URL untuk DJI
 
 Masukkan URL berikut di DJI Custom RTMP, sesuaikan IP dengan yang muncul di dashboard/terminal:

@@ -80,6 +80,22 @@
                 </div>
                 <div class="player-container" id="playerContainer">
                     <video id="videoPlayer" autoplay muted playsinline preload="auto" crossorigin="anonymous"></video>
+                    <div class="player-action-bar">
+                        <button class="player-icon-btn" id="fullscreenBtn" type="button" title="Fullscreen" aria-label="Fullscreen">
+                            <svg class="fullscreen-enter-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M8 3H5a2 2 0 00-2 2v3"/>
+                                <path d="M16 3h3a2 2 0 012 2v3"/>
+                                <path d="M8 21H5a2 2 0 01-2-2v-3"/>
+                                <path d="M16 21h3a2 2 0 002-2v-3"/>
+                            </svg>
+                            <svg class="fullscreen-exit-icon hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M8 3v3a2 2 0 01-2 2H3"/>
+                                <path d="M16 3v3a2 2 0 002 2h3"/>
+                                <path d="M8 21v-3a2 2 0 00-2-2H3"/>
+                                <path d="M16 21v-3a2 2 0 012-2h3"/>
+                            </svg>
+                        </button>
+                    </div>
                     <div class="player-overlay" id="playerOverlay">
                         <div class="player-placeholder">
                             <div class="drone-animation">
@@ -312,13 +328,28 @@
                             </button>
                         </div>
                     </div>
+                    <div class="url-group">
+                        <label class="url-label">
+                            <span class="url-tag lan-tag">LAN</span>
+                            Dashboard untuk device lain
+                        </label>
+                        <div class="url-box">
+                            <code id="lanDashboardUrl">http://YOUR_IP:3000</code>
+                            <button class="copy-btn" data-target="lanDashboardUrl" title="Copy">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <rect x="9" y="9" width="13" height="13" rx="2"/>
+                                    <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
                     <div class="network-note">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
                             <circle cx="12" cy="12" r="10"/>
                             <line x1="12" y1="8" x2="12" y2="12"/>
                             <line x1="12" y1="16" x2="12.01" y2="16"/>
                         </svg>
-                        <span>Pastikan drone & komputer di jaringan WiFi yang sama</span>
+                        <span>Pastikan drone, server, dan device penonton berada di jaringan WiFi yang sama</span>
                     </div>
                 </div>
             </div>

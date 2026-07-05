@@ -12,16 +12,50 @@ function readPort(name, fallback) {
 
 function getLocalIP() {
   const interfaces = os.networkInterfaces();
+  const candidates = [];
 
   for (const name of Object.keys(interfaces)) {
     for (const iface of interfaces[name] || []) {
       if (iface.family === 'IPv4' && !iface.internal) {
-        return iface.address;
+        candidates.push({
+          name,
+          address: iface.address,
+          score: scoreNetworkInterface(name, iface.address)
+        });
       }
     }
   }
 
-  return '127.0.0.1';
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0] ? candidates[0].address : '127.0.0.1';
+}
+
+function scoreNetworkInterface(name, address) {
+  const label = name.toLowerCase();
+  let score = 0;
+
+  if (isPrivateIPv4(address)) score += 20;
+  if (label.includes('wi-fi') || label.includes('wifi') || label.includes('wireless')) score += 15;
+  if (label.includes('ethernet') || label.includes('lan')) score += 10;
+  if (address.startsWith('192.168.')) score += 8;
+  if (address.startsWith('10.')) score += 6;
+  if (address.startsWith('172.')) score += 4;
+  if (label.includes('virtual') || label.includes('vmware') || label.includes('hyper-v') || label.includes('wsl')) score -= 20;
+  if (label.includes('loopback') || label.includes('pseudo')) score -= 30;
+
+  return score;
+}
+
+function isPrivateIPv4(address) {
+  const parts = address.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part))) return false;
+
+  const [a, b] = parts;
+  return (
+    a === 10 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
 }
 
 function hasExecutable(command) {
