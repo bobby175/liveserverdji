@@ -48,6 +48,29 @@ Jika perangkat lain tidak bisa membuka dashboard:
 
 Klik tombol fullscreen di pojok kanan atas player untuk membuka tampilan live memenuhi layar. Tombol tetap tersedia saat player berada dalam mode fullscreen.
 
+## Build EXE Windows
+
+Untuk membuat file `.exe` Windows:
+
+```powershell
+npm install
+npm run build:win
+```
+
+Hasil build ada di:
+
+```text
+dist/windows/DJI-Live-Server.exe
+```
+
+Jalankan file tersebut, lalu buka:
+
+```text
+http://localhost:3000
+```
+
+Folder `dist/windows` juga berisi `ffmpeg.exe` agar HLS bisa aktif di Windows. Jika Windows Firewall meminta izin, pilih Allow untuk jaringan private/WiFi agar dashboard bisa dibuka dari device lain.
+
 ## URL untuk DJI
 
 Masukkan URL berikut di DJI Custom RTMP, sesuaikan IP dengan yang muncul di dashboard/terminal:

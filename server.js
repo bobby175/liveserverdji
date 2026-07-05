@@ -75,6 +75,16 @@ function hasExecutable(command) {
   return !result.error && result.status === 0;
 }
 
+function getPackagedFfmpegPath() {
+  if (!process.pkg) return null;
+
+  const executableDir = path.dirname(process.execPath);
+  const executableName = process.platform === 'win32' ? 'ffmpeg.exe' : 'ffmpeg';
+  const candidate = path.join(executableDir, executableName);
+
+  return fs.existsSync(candidate) ? candidate : null;
+}
+
 function patchNodeMediaTransServer() {
   try {
     const NodeTransServer = require('node-media-server/src/node_trans_server');
@@ -154,8 +164,9 @@ function parseStreamPath(streamPath) {
 const RTMP_PORT = readPort('RTMP_PORT', 1935);
 const HTTP_FLV_PORT = readPort('HTTP_FLV_PORT', 8000);
 const DASHBOARD_PORT = readPort('DASHBOARD_PORT', 3000);
-const MEDIA_ROOT = process.env.MEDIA_ROOT || path.join(__dirname, 'media');
-const FFMPEG_PATH = process.env.FFMPEG_PATH || bundledFfmpegPath || 'ffmpeg';
+const APP_ROOT = process.pkg ? path.dirname(process.execPath) : __dirname;
+const MEDIA_ROOT = process.env.MEDIA_ROOT || path.join(APP_ROOT, 'media');
+const FFMPEG_PATH = process.env.FFMPEG_PATH || getPackagedFfmpegPath() || bundledFfmpegPath || 'ffmpeg';
 const HLS_ENABLED = process.env.HLS_ENABLED !== 'false' && hasExecutable(FFMPEG_PATH);
 
 fs.mkdirSync(MEDIA_ROOT, { recursive: true });

@@ -3,14 +3,32 @@
   "version": "1.0.0",
   "description": "DJI Drone RTMP Live Streaming Dashboard with OBS Studio Export",
   "main": "server.js",
+  "bin": "server.js",
   "scripts": {
     "start": "node server.js",
-    "dev": "node server.js"
+    "dev": "node server.js",
+    "build:win": "powershell -ExecutionPolicy Bypass -File scripts/build-windows-exe.ps1"
+  },
+  "pkg": {
+    "scripts": [
+      "server.js",
+      "node_modules/node-media-server/src/**/*.js"
+    ],
+    "assets": [
+      "public/**/*"
+    ],
+    "targets": [
+      "node18-win-x64"
+    ],
+    "outputPath": "dist/windows"
   },
   "dependencies": {
     "express": "^4.21.0",
     "node-media-server": "^2.7.1",
     "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "pkg": "^5.8.1"
   },
   "keywords": [
     "dji",

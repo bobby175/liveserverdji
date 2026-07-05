@@ -1,5 +1,8 @@
 node_modules/
 .env
 media/
+dist/
+.npm-cache/
+.pkg-cache/
 *.log
 .DS_Store
