@@ -5,6 +5,13 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 
+let bundledFfmpegPath = null;
+try {
+  bundledFfmpegPath = require('ffmpeg-static');
+} catch (error) {
+  bundledFfmpegPath = null;
+}
+
 function readPort(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isInteger(value) && value > 0 ? value : fallback;
@@ -67,6 +74,43 @@ function hasExecutable(command) {
   return !result.error && result.status === 0;
 }
 
+function patchNodeMediaTransServer() {
+  try {
+    const NodeTransServer = require('node-media-server/src/node_trans_server');
+    const Logger = require('node-media-server/src/node_core_logger');
+    const context = require('node-media-server/src/node_core_ctx');
+    const mkdirp = require('mkdirp');
+
+    if (NodeTransServer.prototype.__djiLivePatchApplied) return;
+
+    NodeTransServer.prototype.run = function runPatchedTransServer() {
+      try {
+        mkdirp.sync(this.config.http.mediaroot);
+        fs.accessSync(this.config.http.mediaroot, fs.constants.W_OK);
+      } catch (error) {
+        Logger.error(`Node Media Trans Server startup failed. MediaRoot:${this.config.http.mediaroot} cannot be written.`);
+        return;
+      }
+
+      try {
+        fs.accessSync(this.config.trans.ffmpeg, fs.constants.X_OK);
+      } catch (error) {
+        Logger.error(`Node Media Trans Server startup failed. ffmpeg:${this.config.trans.ffmpeg} cannot be executed.`);
+        return;
+      }
+
+      const apps = this.config.trans.tasks.map((task) => task.app).join(' ');
+      context.nodeEvent.on('postPublish', this.onPostPublish.bind(this));
+      context.nodeEvent.on('donePublish', this.onDonePublish.bind(this));
+      Logger.log(`Node Media Trans Server started for apps: [ ${apps} ] , MediaRoot: ${this.config.http.mediaroot}, ffmpeg: ${this.config.trans.ffmpeg}`);
+    };
+
+    NodeTransServer.prototype.__djiLivePatchApplied = true;
+  } catch (error) {
+    console.warn('Unable to patch Node Media Trans Server:', error.message);
+  }
+}
+
 function formatHostForUrl(host) {
   if (!host) return 'localhost';
   return host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
@@ -92,7 +136,7 @@ const RTMP_PORT = readPort('RTMP_PORT', 1935);
 const HTTP_FLV_PORT = readPort('HTTP_FLV_PORT', 8000);
 const DASHBOARD_PORT = readPort('DASHBOARD_PORT', 3000);
 const MEDIA_ROOT = process.env.MEDIA_ROOT || path.join(__dirname, 'media');
-const FFMPEG_PATH = process.env.FFMPEG_PATH || 'ffmpeg';
+const FFMPEG_PATH = process.env.FFMPEG_PATH || bundledFfmpegPath || 'ffmpeg';
 const HLS_ENABLED = process.env.HLS_ENABLED !== 'false' && hasExecutable(FFMPEG_PATH);
 
 fs.mkdirSync(MEDIA_ROOT, { recursive: true });
@@ -147,6 +191,8 @@ const nmsConfig = {
 };
 
 if (HLS_ENABLED) {
+  patchNodeMediaTransServer();
+
   nmsConfig.trans = {
     ffmpeg: FFMPEG_PATH,
     tasks: [

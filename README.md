@@ -9,7 +9,7 @@ Dashboard lokal untuk menerima live stream RTMP dari DJI/OBS dan menampilkannya 
 - HTTP-FLV preview di port `8000`
 - Auto-detect stream aktif
 - URL DJI/OBS otomatis mengikuti IP server
-- HLS opsional jika FFmpeg tersedia
+- HLS otomatis memakai `ffmpeg-static`
 
 ## Install
 
@@ -83,6 +83,31 @@ Setting sumber stream yang disarankan:
 - Bitrate 720p: 2-4 Mbps
 - Bitrate 1080p: 4-8 Mbps
 - Gunakan WiFi 5 GHz atau LAN jika memungkinkan
+
+## HLS / FFmpeg
+
+Project ini memakai `ffmpeg-static`, jadi HLS akan aktif otomatis setelah:
+
+```bash
+npm install
+```
+
+Jika ingin memakai FFmpeg dari sistem, set `FFMPEG_PATH` sebelum menjalankan server.
+
+Windows PowerShell:
+
+```powershell
+$env:FFMPEG_PATH="C:\ffmpeg\bin\ffmpeg.exe"
+npm start
+```
+
+Linux/Termux:
+
+```bash
+FFMPEG_PATH=/usr/bin/ffmpeg npm start
+```
+
+Untuk preview delay rendah tetap gunakan HTTP-FLV. HLS lebih cocok sebagai fallback untuk player yang tidak mendukung FLV.
 
 ## Android / Termux
 
