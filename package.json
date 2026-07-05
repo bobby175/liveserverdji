@@ -1,0 +1,17 @@
+{
+  "name": "dji-rtmp-live-server",
+  "version": "1.0.0",
+  "description": "DJI Drone RTMP Live Streaming Dashboard with OBS Studio Export",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "node-media-server": "^2.7.1",
+    "express": "^4.21.0"
+  },
+  "keywords": ["dji", "drone", "rtmp", "live-streaming", "obs"],
+  "author": "",
+  "license": "MIT"
+}
