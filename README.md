@@ -9,6 +9,7 @@ Dashboard lokal untuk menerima live stream RTMP dari DJI/OBS dan menampilkannya 
 - HTTP-FLV preview di port `8000`
 - Auto-detect stream aktif
 - URL DJI/OBS otomatis mengikuti IP server
+- QR code dashboard LAN untuk ditonton dari HP lain
 - HLS memakai `ffmpeg-static` di desktop atau FFmpeg sistem di Linux/Termux
 
 ## Install
@@ -35,7 +36,7 @@ Jika ingin dibuka dari perangkat lain dalam jaringan yang sama, gunakan URL LAN 
 http://192.168.x.x:3000
 ```
 
-Dashboard juga menampilkan URL LAN yang bisa disalin dari panel setup.
+Dashboard juga menampilkan URL LAN yang bisa disalin dari panel setup. Untuk HP Android lain, scan QR code di panel setup agar langsung membuka dashboard tanpa mengetik IP manual.
 
 Jika perangkat lain tidak bisa membuka dashboard:
 

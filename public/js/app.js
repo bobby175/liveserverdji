@@ -37,6 +37,7 @@
         serverOnline: false,
         streams: [],
         serverInfo: { ...DEFAULT_SERVER },
+        lastQrUrl: '',
         uptimeSnapshot: 0,
         uptimeUpdatedAt: 0
     };
@@ -75,6 +76,8 @@
         obsHlsUrl: document.getElementById('obsHlsUrl'),
         djiRtmpUrl: document.getElementById('djiRtmpUrl'),
         lanDashboardUrl: document.getElementById('lanDashboardUrl'),
+        lanQrCode: document.getElementById('lanQrCode'),
+        lanQrText: document.getElementById('lanQrText'),
         serverIp: document.getElementById('serverIp'),
         toast: document.getElementById('toast'),
         toastMessage: document.getElementById('toastMessage')
@@ -529,6 +532,7 @@
         DOM.serverIp.textContent = getPublishHost();
         DOM.djiRtmpUrl.textContent = publishUrl;
         DOM.lanDashboardUrl.textContent = lanDashboardUrl;
+        updateLanQrCode(lanDashboardUrl);
 
         if (!state.currentStream) {
             const obsHost = getPlaybackHost();
@@ -542,6 +546,17 @@
         if (!state.currentStream && DOM.placeholderHint) {
             DOM.placeholderHint.textContent = `Push RTMP stream ke ${publishUrl}`;
         }
+    }
+
+    function updateLanQrCode(url) {
+        if (DOM.lanQrText) {
+            DOM.lanQrText.textContent = url;
+        }
+
+        if (!DOM.lanQrCode || state.lastQrUrl === url) return;
+
+        state.lastQrUrl = url;
+        DOM.lanQrCode.src = `${CONFIG.API_BASE}/api/qr/dashboard.svg?url=${encodeURIComponent(url)}`;
     }
 
     function buildDefaultPublishUrl() {

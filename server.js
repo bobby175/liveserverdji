@@ -3,6 +3,7 @@ const express = require('express');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const QRCode = require('qrcode');
 const { spawnSync } = require('child_process');
 
 let bundledFfmpegPath = null;
@@ -118,6 +119,24 @@ function formatHostForUrl(host) {
 
 function getRequestHost(req) {
   return req.hostname || req.ip || getLocalIP();
+}
+
+function getDashboardLanUrl() {
+  return `http://${formatHostForUrl(getLocalIP())}:${DASHBOARD_PORT}`;
+}
+
+function getQrTargetUrl(req) {
+  const requestedUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+
+  if (
+    requestedUrl.length > 0 &&
+    requestedUrl.length <= 300 &&
+    /^https?:\/\/[^\s]+$/i.test(requestedUrl)
+  ) {
+    return requestedUrl;
+  }
+
+  return getDashboardLanUrl();
 }
 
 function parseStreamPath(streamPath) {
@@ -309,6 +328,27 @@ app.get('/api/server', (req, res) => {
 
 app.get('/api/ip', (req, res) => {
   res.json({ ip: getLocalIP() });
+});
+
+app.get('/api/qr/dashboard.svg', async (req, res) => {
+  try {
+    const targetUrl = getQrTargetUrl(req);
+    const svg = await QRCode.toString(targetUrl, {
+      type: 'svg',
+      margin: 1,
+      width: 220,
+      color: {
+        dark: '#0a0f1f',
+        light: '#ffffff'
+      }
+    });
+
+    res.set('Cache-Control', 'no-store');
+    res.type('image/svg+xml').send(svg);
+  } catch (error) {
+    console.error('Failed to generate dashboard QR:', error);
+    res.status(500).json({ error: 'Failed to generate QR code' });
+  }
 });
 
 app.get('/api/obs-config', (req, res) => {

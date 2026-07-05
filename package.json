@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "express": "^4.21.0",
-    "node-media-server": "^2.7.1"
+    "node-media-server": "^2.7.1",
+    "qrcode": "^1.5.4"
   },
   "keywords": [
     "dji",
