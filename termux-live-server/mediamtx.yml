@@ -1,0 +1,30 @@
+# MediaMTX config khusus Termux.
+# Jalankan hanya satu MediaMTX untuk satu sumber RTMP drone.
+
+logLevel: info
+
+paths:
+  all:
+    source: publisher
+
+rtmp: yes
+rtmpAddress: :1935
+
+rtsp: yes
+rtspAddress: :8554
+
+hls: yes
+hlsAddress: :8888
+hlsVariant: lowLatency
+hlsSegmentCount: 7
+hlsSegmentDuration: 1s
+hlsPartDuration: 200ms
+
+webrtc: yes
+webrtcAddress: :8889
+
+api: yes
+apiAddress: :9997
+
+readBufferCount: 1024
+writeQueueSize: 512

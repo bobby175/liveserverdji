@@ -4,5 +4,11 @@ media/
 dist/
 .npm-cache/
 .pkg-cache/
+.vscode/
+aplikasi android live/.gradle/
+aplikasi android live/build/
+aplikasi android live/app/build/
+MediaMTX-Server/mediamtx.exe
+MediaMTX-Server/*.log
 *.log
 .DS_Store

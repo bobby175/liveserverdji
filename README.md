@@ -1,75 +1,59 @@
-# DJI RTMP Live Server
+# DJI RTMP Live Server (MediaMTX Edition)
 
-Dashboard lokal untuk menerima live stream RTMP dari DJI/OBS dan menampilkannya di browser dengan HTTP-FLV low latency.
+Dashboard lokal untuk menerima live stream RTMP dari DJI/OBS dan menampilkannya di browser dengan WebRTC (Ultra Low Latency). Backend streaming kini menggunakan **MediaMTX** yang jauh lebih cepat, ringan, dan mendukung berbagai protokol (RTMP, RTSP, HLS, WebRTC).
 
 ## Fitur
 
-- RTMP ingest di port `1935`
+- Menggunakan **MediaMTX** sebagai engine streaming utama.
 - Dashboard web di port `3000`
-- HTTP-FLV preview di port `8000`
-- Auto-detect stream aktif
+- WebRTC preview di port `8889` (Latensi sangat rendah < 0.5 detik di browser)
+- RTSP `8554` & HLS `8888` fallback
 - URL DJI/OBS otomatis mengikuti IP server
 - QR code dashboard LAN untuk ditonton dari HP lain
-- HLS memakai `ffmpeg-static` di desktop atau FFmpeg sistem di Linux/Termux
+- Mendukung penuh Termux (Android) dan PC (Windows/Linux/Mac).
 
-## Install
+## Instalasi & Menjalankan (Windows / PC)
 
-```bash
-npm install
-```
+1. **Jalankan MediaMTX**:
+   - Download MediaMTX dari [Releases GitHub](https://github.com/bluenviron/mediamtx/releases).
+   - Ekstrak dan jalankan `mediamtx.exe` (Pastikan menggunakan file `mediamtx.yml` yang mengaktifkan API di port `9997`).
+2. **Jalankan Dashboard**:
+   - Buka terminal di folder project ini.
+   - Install dependensi: `npm install`
+   - Jalankan server: `npm start`
+3. Buka browser: `http://localhost:3000`
 
-## Jalankan
+## Menjalankan di Android (Termux)
 
-```bash
-npm start
-```
+MediaMTX dan Dashboard ini dapat dijalankan sepenuhnya di HP Android Anda melalui Termux!
 
-Setelah server berjalan, buka:
-
-```text
-http://localhost:3000
-```
-
-Jika ingin dibuka dari perangkat lain dalam jaringan yang sama, gunakan URL LAN yang muncul di terminal, misalnya:
-
-```text
-http://192.168.x.x:3000
-```
-
-Dashboard juga menampilkan URL LAN yang bisa disalin dari panel setup. Untuk HP Android lain, scan QR code di panel setup agar langsung membuka dashboard tanpa mengetik IP manual.
-
-Jika perangkat lain tidak bisa membuka dashboard:
-
-- Pastikan semua perangkat berada di WiFi/hotspot yang sama
-- Pastikan firewall mengizinkan port `3000`, `1935`, dan `8000`
-- Gunakan IP LAN server, bukan `localhost`
-
-## Fullscreen
-
-Klik tombol fullscreen di pojok kanan atas player untuk membuka tampilan live memenuhi layar. Tombol tetap tersedia saat player berada dalam mode fullscreen.
-
-## Build EXE Windows
-
-Untuk membuat file `.exe` Windows:
-
-```powershell
-npm install
-npm run build:win
-```
-
-Hasil build ada di:
-
-```text
-dist/windows/DJI-Live-Server.exe
-```
-
-Jalankan file tersebut, lalu buka:
-
-```text
-http://localhost:3000
-```
-
-Folder `dist/windows` juga berisi `ffmpeg.exe` agar HLS bisa aktif di Windows. Jika Windows Firewall meminta izin, pilih Allow untuk jaringan private/WiFi agar dashboard bisa dibuka dari device lain.
+1. Buka Termux, jalankan update dan install package:
+   ```bash
+   pkg update
+   pkg install nodejs git wget
+   ```
+2. Download MediaMTX (Contoh untuk ARM64):
+   ```bash
+   wget https://github.com/bluenviron/mediamtx/releases/download/v1.9.0/mediamtx_v1.9.0_linux_arm64.tar.gz
+   tar -xvzf mediamtx_v1.9.0_linux_arm64.tar.gz
+   ```
+3. Edit `mediamtx.yml` (Bisa pakai `nano mediamtx.yml`), pastikan API aktif:
+   ```yaml
+   api: yes
+   apiAddress: :9997
+   ```
+4. Jalankan MediaMTX di background (atau di session Termux baru):
+   ```bash
+   ./mediamtx &
+   ```
+5. Clone dan jalankan Dashboard:
+   ```bash
+   git clone https://github.com/bobby175/liveserverdji.git
+   cd liveserverdji
+   npm install
+   npm start
+   ```
+6. Buka IP Android Anda di browser (Port 3000). Contoh: `http://192.168.1.5:3000`
 
 ## URL untuk DJI
 
@@ -77,12 +61,6 @@ Masukkan URL berikut di DJI Custom RTMP, sesuaikan IP dengan yang muncul di dash
 
 ```text
 rtmp://<IP-SERVER>:1935/live/drone
-```
-
-Contoh:
-
-```text
-rtmp://192.168.8.171:1935/live/drone
 ```
 
 ## Test Publish dari OBS
@@ -93,66 +71,11 @@ Di OBS:
 - Server: `rtmp://<IP-SERVER>:1935/live`
 - Stream Key: `drone`
 
-Lalu klik `Start Streaming`.
+## Ekspor ke OBS / vMix / Software Lain
 
-## Low Latency
+Dashboard ini menyediakan beberapa output yang bisa ditangkap oleh software produksi:
 
-Untuk delay rendah, gunakan jalur HTTP-FLV di dashboard. Hindari HLS untuk preview realtime.
-
-Setting sumber stream yang disarankan:
-
-- Codec: H.264
-- FPS: 30
-- Keyframe interval: 1-2 detik
-- Bitrate 720p: 2-4 Mbps
-- Bitrate 1080p: 4-8 Mbps
-- Gunakan WiFi 5 GHz atau LAN jika memungkinkan
-
-## HLS / FFmpeg
-
-Di desktop, project ini memakai `ffmpeg-static`, jadi HLS akan aktif otomatis setelah:
-
-```bash
-npm install
-```
-
-Jika ingin memakai FFmpeg dari sistem, set `FFMPEG_PATH` sebelum menjalankan server.
-
-Windows PowerShell:
-
-```powershell
-$env:FFMPEG_PATH="C:\ffmpeg\bin\ffmpeg.exe"
-npm start
-```
-
-Linux/Termux:
-
-```bash
-pkg install ffmpeg
-FFMPEG_PATH=/data/data/com.termux/files/usr/bin/ffmpeg npm start
-```
-
-Untuk preview delay rendah tetap gunakan HTTP-FLV. HLS lebih cocok sebagai fallback untuk player yang tidak mendukung FLV.
-
-## Android / Termux
-
-Project ini juga bisa dijalankan di Android dengan Termux:
-
-```bash
-pkg update
-pkg install nodejs git ffmpeg
-git clone https://github.com/bobby175/liveserverdji.git
-cd liveserverdji
-npm install --omit=optional
-node server.js
-```
-
-`--omit=optional` sengaja dipakai agar Termux tidak mencoba memasang `ffmpeg-static`, karena paket itu sering tidak cocok di Android. Server tetap bisa menjalankan HLS dari FFmpeg Termux.
-
-Jika DJI app dan server berjalan di HP yang sama, coba URL:
-
-```text
-rtmp://127.0.0.1:1935/live/drone
-```
-
-Jika tidak bisa, pakai IP HP di jaringan/hotspot.
+1. **WebRTC**: Latensi super rendah untuk Browser Source.
+2. **RTSP**: Paling stabil untuk VLC / OBS Media Source.
+3. **RTMP**: Standar penyiaran.
+4. **HLS**: Paling kompatibel (namun delay tinggi).
