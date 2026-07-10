@@ -62,6 +62,13 @@ http://IP_HP:3000?preview=off
 
 - Jalankan hanya satu MediaMTX.
 - Kalau membuka lebih dari satu dashboard, pakai `?preview=off` untuk dashboard kedua agar tidak menambah viewer WebRTC.
+- Jika muncul error `route ip+net: netlinkrib: permission denied`, itu dari Android/Termux yang menolak akses routing table. Paket ini sudah mematikan scan interface otomatis MediaMTX dan mengisi IP WebRTC dari `start.sh`.
+- Jika IP HP salah terdeteksi, jalankan manual:
+
+```bash
+WEBRTC_HOST=192.168.8.171 ./start.sh
+```
+
 - Kalau install MediaMTX gagal, taruh binary `mediamtx` yang cocok untuk Termux/Android di folder ini, lalu jalankan `./start.sh`.
 - Jika ingin pakai binary di lokasi lain:
 

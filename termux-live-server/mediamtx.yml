@@ -22,6 +22,11 @@ hlsPartDuration: 200ms
 
 webrtc: yes
 webrtcAddress: :8889
+# Android/Termux sering menolak akses routing table via netlink.
+# Karena itu jangan biarkan MediaMTX scan interface otomatis.
+# start.sh akan membuat config runtime dan mengisi IP HP ke webrtcAdditionalHosts.
+webrtcIPsFromInterfaces: no
+webrtcAdditionalHosts: [127.0.0.1]
 
 api: yes
 apiAddress: :9997
